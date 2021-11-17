@@ -5,10 +5,11 @@ library(ggthemes)
 library(ggrepel)
 library(gridExtra)
 library(caret)
+library(e1071)
 
 
 
-binary_methods <- c("Logistic regression", "K-nearest neighbors", "Decision Trees")
+binary_methods <- c("Logistic regression", "K-nearest neighbors", "Naive Bayes")
 
 #############################
 ui <- fluidPage(theme = shinytheme("sandstone"),
@@ -47,7 +48,8 @@ ui <- fluidPage(theme = shinytheme("sandstone"),
                            sidebarLayout(
                              sidebarPanel(
                                p(strong("What type of binary classifcation would you like to do?")),
-                               selectInput("method", "What method would you like to use?", binary_methods)),
+                               radioButtons("method", "What method would you like to use?", binary_methods),
+                               uiOutput("myk")),
                              
                              
                              mainPanel(
@@ -181,6 +183,21 @@ server <- function(input, output, session) {
     
     # k nearest neighbors, fo rnow with default k = 10
     else if (input$method == "K-nearest neighbors"){
+      
+      
+      ############
+      output$myk = renderUI({#creates County select box object called in ui
+        
+        #creates a reactive list of available counties based on the State selection made
+        
+        selectInput(inputId = "neighbors", #name of input
+                    label = "Choose your number of neighbors (K):", #label displayed in ui
+                    choices = seq(1:20)) #calls list of available counties
+      })
+    
+      #####################
+      
+      
       # maybe move outside this function
       set.seed(1)
       trainIndex <- createDataPartition(mydata$y, p = .7, 
@@ -188,7 +205,7 @@ server <- function(input, output, session) {
                                         times = 1)
       train_set <- mydata[ trainIndex,]
       test_set <- mydata[-trainIndex,]
-      knn_mod <- knn3(y ~ ., data = train_set, k = 10)
+      knn_mod <- knn3(y ~ ., data = train_set, k = as.numeric(input$neighbors))
       knn_probs <- predict(knn_mod, newdata = test_set)[,2]
       knn_preds <- ifelse(knn_probs > 0.5, 1, 0)
       
@@ -201,6 +218,32 @@ server <- function(input, output, session) {
                              "NPV" = metrics_knn[4])
       knn_data
     }
+    
+    
+    
+    else if (input$method == "Naive Bayes"){
+      # maybe move outside this function
+      set.seed(1)
+      # split test and training data into 70.30 split
+      trainIndex <- createDataPartition(mydata$y, p = .7, 
+                                        list = FALSE, 
+                                        times = 1)
+      train_set <- mydata[ trainIndex,]
+      test_set <- mydata[-trainIndex,]
+      # fit and predict
+      nb_model <- naiveBayes(y ~ ., data = train_set)
+      nb_preds <- predict(nb_model, newdata = test_set)
+
+      accuracy <- confusionMatrix(data = as.factor(nb_preds), reference = as.factor(test_set$y), positive = "1")$overall[1]
+      metrics <-  confusionMatrix(data = as.factor(nb_preds), reference = as.factor(test_set$y), positive = "1")$byClass[1:4]
+      nb_data <- data.frame("accuracy" = accuracy, 
+                             "sensitivity" = metrics[1],
+                             "specificity" = metrics[2],
+                             "PPV" = metrics[3],
+                             "NPV" = metrics[4])
+      nb_data
+    }
+    
     
   }
   
