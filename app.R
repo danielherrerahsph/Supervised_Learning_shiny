@@ -137,7 +137,50 @@ server <- function(input, output, session) {
   
   # summary table for tab 2 binary outcome
   output$summary <- renderTable({
+    # must recreate dataset, seems inefficient
+    file <- input$upload
+    ext <- tools::file_ext(file$datapath)
+    
+    req(file)
+    # check csv 
+    validate(need(ext == "csv", "Please upload a csv file"))
+    
+    mydata <- read.csv(file = file$datapath, header = TRUE)
+    
+    # rename variables
+    # need col 1 to be outcome
+    # create x1,x2...xn for predictors
+    headers <- sprintf("X%d",seq(1:(length(mydata)-1)))
+    # new names 
+    colnames(mydata) <- c("y", headers)
+    
+    # do logistic regression
     if (input$method == "Logistic regression"){
+      # maybe move outside this function
+      set.seed(1)
+      # split test and training data into 70.30 split
+      trainIndex <- createDataPartition(mydata$y, p = .7, 
+                                        list = FALSE, 
+                                        times = 1)
+      train_set <- mydata[ trainIndex,]
+      test_set <- mydata[-trainIndex,]
+      # fit and predict
+      logistic_model <- glm(y ~ ., data = train_set, family = "binomial")
+      glm_probs <- predict(logistic_model, newdata = test_set, type = "response")
+      glm_preds <- ifelse(glm_probs > 0.5, 1, 0)
+      
+      accuracy <- confusionMatrix(data = as.factor(glm_preds), reference = as.factor(test_set$y), positive = "1")$overall[1]
+      metrics <-  confusionMatrix(data = as.factor(glm_preds), reference = as.factor(test_set$y), positive = "1")$byClass[1:4]
+      glm_data <- data.frame("accuracy" = accuracy, 
+                             "sensitivity" = metrics[1],
+                             "specificity" = metrics[2],
+                             "PPV" = metrics[3],
+                             "NPV" = metrics[4])
+      glm_data
+    }
+    
+    # k nearest neighbors, fo rnow with default k = 10
+    else if (input$method == "K-nearest neighbors"){
       # maybe move outside this function
       set.seed(1)
       trainIndex <- createDataPartition(mydata$y, p = .7, 
@@ -145,24 +188,30 @@ server <- function(input, output, session) {
                                         times = 1)
       train_set <- mydata[ trainIndex,]
       test_set <- mydata[-trainIndex,]
-      logistic_model <- glm(y ~ ., data = train_set, family = "binomial")
-      glm_probs <- predict(logistic_model, newdata = test_set, type = "response")
-      glm_preds <- ifelse(glm_probs > 0.5, 1, 0)
+      knn_mod <- knn3(y ~ ., data = train_set, k = 10)
+      knn_probs <- predict(knn_mod, newdata = test_set)[,2]
+      knn_preds <- ifelse(knn_probs > 0.5, 1, 0)
       
-      accuracy <- confusionMatrix(data = as.factor(glm_preds), reference = as.factor(test_set$y), positive = "1")$overall[1]
-      metrics <-  confusionMatrix(data = as.factor(glm_preds), reference = as.factor(test_set$y), positive = "1")$byClass[1:4]
-      data.frame("accuracy" = accuracy, 
-                 "sensitivity" = metrics[1],
-                 "specificity" = metrics[2],
-                 "PPV" = metrics[3],
-                 "NPV" = metrics[4])
+      accuracy_knn <- confusionMatrix(data = as.factor(knn_preds), reference = as.factor(test_set$y), positive = "1")$overall[1]
+      metrics_knn <-  confusionMatrix(data = as.factor(knn_preds), reference = as.factor(test_set$y), positive = "1")$byClass[1:4]
+      knn_data <- data.frame("accuracy" = accuracy_knn, 
+                             "sensitivity" = metrics_knn[1],
+                             "specificity" = metrics_knn[2],
+                             "PPV" = metrics_knn[3],
+                             "NPV" = metrics_knn[4])
+      knn_data
     }
     
   }
-    
+  
   )
   
 }
 
 # Run the app ----
 shinyApp(ui = ui, server = server)
+
+
+
+
+
