@@ -183,16 +183,18 @@ server <- function(input, output, session) {
     
     # k nearest neighbors, fo rnow with default k = 10
     else if (input$method == "K-nearest neighbors"){
-      
+      #knn_default = 1
       
       ############
       output$myk = renderUI({#creates County select box object called in ui
         
         #creates a reactive list of available counties based on the State selection made
         
-        selectInput(inputId = "neighbors", #name of input
+        radioButtons(inputId = "neighbors", #name of input
                     label = "Choose your number of neighbors (K):", #label displayed in ui
-                    choices = seq(1:20)) #calls list of available counties
+                    choices = seq(1:20),
+                    selected = input$neighbors) #calls list of available counties
+        #knn_default = input$neighbors
       })
     
       #####################
