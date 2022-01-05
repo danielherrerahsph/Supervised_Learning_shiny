@@ -7,4 +7,6 @@ Currently, this dashboard allows for logistic regression, K-nearest neighbors, n
 
 For future additions, I would like to be able to include a method of kfold cross validation. Additionally, more flexibility in the data uploading process, including but not limited to handling different file types and specificing column data types, would improve the general usability of this dashboard.
 
+The app can currenlty be accessed at: https://danielherrera1500.shinyapps.io/Supervised_Learning_shiny/
+
 *Note: this project is ongoing*
