@@ -92,7 +92,23 @@ ui <- fluidPage(theme = shinytheme("sandstone"),
                     
                     
                     
-                    #forth panel -decision trees
+                    # fourth panel is logistic regression
+                    tabPanel("Naive Bayes",
+                             sidebarLayout(
+                                 sidebarPanel(
+                                     p("Click to perform Naive Bayes"),
+                                     actionButton("nb", "Perform")),
+                                 
+                                 
+                                 
+                                 mainPanel(
+                                     tableOutput("summary_nb"),
+                                     plotOutput("myroc_nb", width = 600)
+                                 )
+                             )
+                    ),
+                    
+                    # fifth panel -decision trees
                     tabPanel("Decision Tree",
                              sidebarLayout(
                                  sidebarPanel(
@@ -202,23 +218,26 @@ server <- function(input, output, session) {
         mydata <- mydata %>% 
             rename(., y = !!input$outcome)
         
+        # do logistic regression
+        # maybe move outside this function
+        set.seed(1)
+        
+        # split test and training data into 70.30 split
+        trainIndex <- createDataPartition(mydata$y, p = .7, 
+                                          list = FALSE, 
+                                          times = 1)
+        train_set <- mydata[ trainIndex,]
+        test_set <- mydata[-trainIndex,]
+        # fit and predict
+        
+        
+        logistic_model <- glm(y ~ ., data = train_set, family = "binomial")
+        glm_probs <- predict(logistic_model, newdata = test_set, type = "response")
+        glm_preds <- ifelse(glm_probs > 0.5, 1, 0)
+        
+        
+        
         output$summary_log <- renderTable({
-            
-            
-            # do logistic regression
-            # maybe move outside this function
-            set.seed(1)
-            
-            # split test and training data into 70.30 split
-            trainIndex <- createDataPartition(mydata$y, p = .7, 
-                                              list = FALSE, 
-                                              times = 1)
-            train_set <- mydata[ trainIndex,]
-            test_set <- mydata[-trainIndex,]
-            # fit and predict
-            logistic_model <- glm(y ~ ., data = train_set, family = "binomial")
-            glm_probs <- predict(logistic_model, newdata = test_set, type = "response")
-            glm_preds <- ifelse(glm_probs > 0.5, 1, 0)
             
             accuracy <- confusionMatrix(data = as.factor(glm_preds), reference = as.factor(test_set$y), positive = "1")$overall[1]
             metrics <-  confusionMatrix(data = as.factor(glm_preds), reference = as.factor(test_set$y), positive = "1")$byClass[1:4]
@@ -231,19 +250,7 @@ server <- function(input, output, session) {
         })
        
         output$myroc_log <- renderPlot({
-            # must recreate, which seems highly inefficient
-            set.seed(1)
-            
-            # split test and training data into 70.30 split
-            trainIndex <- createDataPartition(mydata$y, p = .7, 
-                                              list = FALSE, 
-                                              times = 1)
-            train_set <- mydata[ trainIndex,]
-            test_set <- mydata[-trainIndex,]
-            
-            logistic_model <- glm(y ~ ., data = train_set, family = "binomial")
-            glm_probs <- predict(logistic_model, newdata = test_set, type = "response")
-            glm_preds <- ifelse(glm_probs > 0.5, 1, 0)
+
             
             ggroc(roc(test_set$y, glm_probs), legacy.axes = T, col = "lightsteelblue3", size = 2) +
                 geom_abline(linetype = "dashed", alpha = 0.4) + 
@@ -269,36 +276,42 @@ server <- function(input, output, session) {
 # tab 3 outputs - knn
 
     observeEvent(input$knn, {
+        
+        
+        # must recreate dataset, seems inefficient
+        file <- input$upload
+        ext <- tools::file_ext(file$datapath)
+        
+        req(file)
+        # check csv 
+        validate(need(ext == "csv", "Please upload a csv file"))
+        
+        mydata <- read.csv(file = file$datapath, header = TRUE)
+        
+        # make outcome variable be named y for simplicity
+        mydata <- mydata %>% 
+            rename(., y = !!input$outcome)
+        
+        
+        # do knn 
+        # maybe move outside this function
+        set.seed(1)
+        
+        # split test and training data into 70.30 split
+        trainIndex <- createDataPartition(mydata$y, p = .7, 
+                                          list = FALSE, 
+                                          times = 1)
+        train_set <- mydata[ trainIndex,]
+        test_set <- mydata[-trainIndex,]
+        
+        # fit and predict
+        knn_mod <- knn3(y ~ ., data = train_set, k = as.numeric(input$neighbors))
+        knn_probs <- predict(knn_mod, newdata = test_set)[,2]
+        knn_preds <- ifelse(knn_probs > 0.5, 1, 0)
+        
+        
+        
         output$summary_knn <- renderTable({
-            # must recreate dataset, seems inefficient
-            file <- input$upload
-            ext <- tools::file_ext(file$datapath)
-            
-            req(file)
-            # check csv 
-            validate(need(ext == "csv", "Please upload a csv file"))
-            
-            mydata <- read.csv(file = file$datapath, header = TRUE)
-            
-            # make outcome variable be named y for simplicity
-            mydata <- mydata %>% 
-                rename(., y = !!input$outcome)
-            
-            
-            # do knn 
-            # maybe move outside this function
-            set.seed(1)
-            
-            # split test and training data into 70.30 split
-            trainIndex <- createDataPartition(mydata$y, p = .7, 
-                                              list = FALSE, 
-                                              times = 1)
-            train_set <- mydata[ trainIndex,]
-            test_set <- mydata[-trainIndex,]
-            # fit and predict
-            knn_mod <- knn3(y ~ ., data = train_set, k = as.numeric(input$neighbors))
-            knn_probs <- predict(knn_mod, newdata = test_set)[,2]
-            knn_preds <- ifelse(knn_probs > 0.5, 1, 0)
             
             accuracy_knn <- confusionMatrix(data = as.factor(knn_preds), reference = as.factor(test_set$y), positive = "1")$overall[1]
             metrics_knn <-  confusionMatrix(data = as.factor(knn_preds), reference = as.factor(test_set$y), positive = "1")$byClass[1:4]
@@ -311,6 +324,8 @@ server <- function(input, output, session) {
         })
         
         output$myroc_knn <- renderPlot({
+
+            
             
             ggroc(roc(test_set$y, knn_probs), legacy.axes = T, col = "lightsteelblue3", size = 2) +
                 geom_abline(linetype = "dashed", alpha = 0.4) + 
@@ -331,44 +346,122 @@ server <- function(input, output, session) {
     })
     
     
+    # tab 4  outputs - naive Bayes
+    
+    observeEvent(input$nb, {
+        
+        
+        # must recreate dataset, seems inefficient
+        file <- input$upload
+        ext <- tools::file_ext(file$datapath)
+        
+        req(file)
+        # check csv 
+        validate(need(ext == "csv", "Please upload a csv file"))
+        
+        mydata <- read.csv(file = file$datapath, header = TRUE)
+        
+        # make outcome variable be named y for simplicity
+        mydata <- mydata %>% 
+            rename(., y = !!input$outcome)
+        
+        
+        # maybe move outside this function
+        set.seed(1)
+        
+        # split test and training data into 70.30 split
+        trainIndex <- createDataPartition(mydata$y, p = .7, 
+                                          list = FALSE, 
+                                          times = 1)
+        train_set <- mydata[ trainIndex,]
+        test_set <- mydata[-trainIndex,]
+        
+        # fit and predict
+        nb_mod <- naiveBayes(y ~ ., data = train_set)
+        nb_preds <- predict(nb_mod, newdata = test_set)
+        nb_probs<- predict(nb_mod, test_set, type = "raw")[,2]
+        
+        
+        output$summary_nb <- renderTable({
+            
+            accuracy_nb <- confusionMatrix(data = as.factor(nb_preds), reference = as.factor(test_set$y), positive = "1")$overall[1]
+            metrics_nb <-  confusionMatrix(data = as.factor(nb_preds), reference = as.factor(test_set$y), positive = "1")$byClass[1:4]
+            nb_data <- data.frame("accuracy" = accuracy_nb, 
+                                   "sensitivity" = metrics_nb[1],
+                                   "specificity" = metrics_nb[2],
+                                   "PPV" = metrics_nb[3],
+                                   "NPV" = metrics_nb[4])
+            nb_data
+        })
+        
+        output$myroc_nb <- renderPlot({
+            
+            
+            
+            ggroc(roc(test_set$y, nb_probs), legacy.axes = T, col = "lightsteelblue3", size = 2) +
+                geom_abline(linetype = "dashed", alpha = 0.4) + 
+                ggtitle("ROC Curve") +
+                xlab("1- Specificity") + 
+                ylab("Sensitivity")+
+                guides(colour = guide_legend(title = "Models")) + 
+                theme_bw() +
+                theme(title = element_text(size = 15),
+                      axis.title = element_text(size = 12, face = "bold"),
+                      legend.title = element_text(size = 10, face = "bold"),
+                      panel.border = element_blank())
+            
+            
+            
+        }) 
+        
+    })
     
     
-# tab 4 - decision trees
+    
+    
+# tab 5 - decision trees
     
     
     observeEvent(input$dt, {
+        
+        
+        # must recreate dataset, seems inefficient
+        file <- input$upload
+        ext <- tools::file_ext(file$datapath)
+        
+        req(file)
+        # check csv 
+        validate(need(ext == "csv", "Please upload a csv file"))
+        
+        mydata <- read.csv(file = file$datapath, header = TRUE)
+        
+        # make outcome variable be named y for simplicity
+        mydata <- mydata %>% 
+            rename(., y = !!input$outcome)
+        
+        
+        # do knn 
+        # maybe move outside this function
+        set.seed(1)
+        
+        # split test and training data into 70.30 split
+        trainIndex <- createDataPartition(mydata$y, p = .7, 
+                                          list = FALSE, 
+                                          times = 1)
+        train_set <- mydata[ trainIndex,]
+        test_set <- mydata[-trainIndex,]
+        
+        # fit and predict
+        tree_model <- rpart(y ~ ., data = train_set, cp = input$cp)
+        tree_probs <- predict(tree_model, newdata = test_set)
+        
+        tree_preds <- factor(ifelse(tree_probs >= 0.5, 1, 0))
+        
+        
         output$summary_dt <- renderTable({
             
-            # must recreate dataset, seems inefficient
-            file <- input$upload
-            ext <- tools::file_ext(file$datapath)
             
-            req(file)
-            # check csv 
-            validate(need(ext == "csv", "Please upload a csv file"))
-            
-            mydata <- read.csv(file = file$datapath, header = TRUE)
-            
-            # make outcome variable be named y for simplicity
-            mydata <- mydata %>% 
-                rename(., y = !!input$outcome)
-            
-            # maybe move outside this function
-            set.seed(1)
-            
-            # split test and training data into 70.30 split
-            trainIndex <- createDataPartition(mydata$y, p = .7, 
-                                              list = FALSE, 
-                                              times = 1)
-            train_set <- mydata[ trainIndex,]
-            test_set <- mydata[-trainIndex,]
-            
-            # fit and predict
-            tree_model <- rpart(y ~ ., data = train_set, cp = input$cp)
-            tree_probs <- predict(tree_model, newdata = test_set)
-            
-            tree_preds <- factor(ifelse(tree_probs >= 0.5, 1, 0))
-            
+          
             accuracy_dt <- confusionMatrix(data = as.factor(tree_preds), reference = as.factor(test_set$y), positive = "1")$overall[1]
             metrics_dt <-  confusionMatrix(data = as.factor(tree_preds), reference = as.factor(test_set$y), positive = "1")$byClass[1:4]
             dt_data <- data.frame("accuracy" = accuracy_dt, 
@@ -380,10 +473,11 @@ server <- function(input, output, session) {
         })
         
         output$myroc_dt <- renderPlot({
+ 
             
-            ggroc(roc(test_set$y, dt_probs), legacy.axes = T, col = "lightsteelblue3", size = 2) +
+            ggroc(roc(test_set$y, tree_probs), legacy.axes = T, col = "lightsteelblue3", size = 2) +
                 geom_abline(linetype = "dashed", alpha = 0.4) + 
-                ggtitle(paste0("ROC Curve (k = ",input$neighbors, ")")) +
+                ggtitle(paste0("ROC Curve (cp = ",input$cp, ")")) +
                 xlab("1- Specificity") + 
                 ylab("Sensitivity")+
                 guides(colour = guide_legend(title = "Models")) + 
